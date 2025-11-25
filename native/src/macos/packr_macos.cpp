@@ -13,12 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+#include "../packr.h"
+
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
+#include <iostream>
 #include <pthread.h>
+#include <CoreFoundation/CoreFoundation.h>
 #include <stdlib.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include <iostream>
 
@@ -30,6 +35,10 @@ using namespace std;
 //#define VERBOSE
 
 const char __CLASS_PATH_DELIM = ':';
+
+void sourceCallBack(void* info) {
+
+}
 
 void sourceCallBack(void* info) {}
 
@@ -45,14 +54,17 @@ void* launchVM(void* param) {
 }
 
 int main(int argc, char** argv) {
+
     if (!setCmdLineArguments(argc, argv)) {
         return EXIT_FAILURE;
     }
 
     launchJavaVM([](LaunchJavaVMDelegate delegate, const JavaVMInitArgs& args) {
+
         for (jint arg = 0; arg < args.nOptions; arg++) {
             const char* optionString = args.options[arg].optionString;
             if (strcmp("-XstartOnFirstThread", optionString) == 0) {
+
                 if (verbose) {
                     cout << "Starting JVM on main thread (-XstartOnFirstThread found) ..." << endl;
                 }
@@ -102,12 +114,14 @@ int main(int argc, char** argv) {
         CFRunLoopSourceRef sourceRef = CFRunLoopSourceCreate(NULL, 0, &sourceContext);
         CFRunLoopAddSource(CFRunLoopGetCurrent(), sourceRef, kCFRunLoopCommonModes);
         CFRunLoopRun();
+
     });
 
     return 0;
 }
 
 bool loadJNIFunctions(GetDefaultJavaVMInitArgs* getDefaultJavaVMInitArgs, CreateJavaVM* createJavaVM) {
+
     char buf[MAXPATHLEN];
     string cwd;
 
@@ -115,29 +129,11 @@ bool loadJNIFunctions(GetDefaultJavaVMInitArgs* getDefaultJavaVMInitArgs, Create
         cwd.append(buf).append("/");
     }
 
-    char resourcesDir[MAXPATHLEN];
-    bool foundResources = false;
+    string path = cwd + "jre/lib/libjli.dylib";
 
-    CFBundleRef bundle = CFBundleGetMainBundle();
-    if (bundle != NULL) {
-        CFURLRef resources = CFBundleCopyResourcesDirectoryURL(bundle);
-        if (resources != NULL) {
-            foundResources = CFURLGetFileSystemRepresentation(resources, true, (UInt8*)resourcesDir, sizeof(resourcesDir));
-            CFRelease(resources);
-        }
-    }
-
-    if (!foundResources) {
-        cerr << "Failed to locate Resources directory" << endl;
-        return false;
-    }
-
-    string basePath = string(resourcesDir) + "/jre/lib/";
-
-    string path = basePath + "libjli.dylib";
     void* handle = dlopen(path.c_str(), RTLD_LAZY);
     if (handle == NULL) {
-        path = basePath + "jli/libjli.dylib";
+        path = cwd + "jre/lib/jli/libjli.dylib";
         handle = dlopen(path.c_str(), RTLD_LAZY);
         if (handle == NULL) {
             cerr << dlerror() << endl;
@@ -145,6 +141,8 @@ bool loadJNIFunctions(GetDefaultJavaVMInitArgs* getDefaultJavaVMInitArgs, Create
         }
     }
 
+	*getDefaultJavaVMInitArgs = (GetDefaultJavaVMInitArgs) dlsym(handle, "JNI_GetDefaultJavaVMInitArgs");
+	*createJavaVM = (CreateJavaVM) dlsym(handle, "JNI_CreateJavaVM");
     *getDefaultJavaVMInitArgs = (GetDefaultJavaVMInitArgs)dlsym(handle, "JNI_GetDefaultJavaVMInitArgs");
     *createJavaVM = (CreateJavaVM)dlsym(handle, "JNI_CreateJavaVM");
 
@@ -153,14 +151,17 @@ bool loadJNIFunctions(GetDefaultJavaVMInitArgs* getDefaultJavaVMInitArgs, Create
         return false;
     }
 
+	return true;
     return true;
 }
 
 extern "C" {
+    int _NSGetExecutablePath(char* buf, uint32_t* bufsize);
 int _NSGetExecutablePath(char* buf, uint32_t* bufsize);
 }
 
 const char* getExecutablePath(const char* argv0) {
+
     static char buf[MAXPATHLEN];
     uint32_t size = sizeof(buf);
 
@@ -173,6 +174,7 @@ const char* getExecutablePath(const char* argv0) {
     if (bundle != NULL) {
         CFURLRef resources = CFBundleCopyResourcesDirectoryURL(bundle);
         if (resources != NULL) {
+            foundResources = CFURLGetFileSystemRepresentation(resources, true, (UInt8*) resourcesDir, size);
             foundResources = CFURLGetFileSystemRepresentation(resources, true, (UInt8*)resourcesDir, size);
             CFRelease(resources);
         }
@@ -214,6 +216,12 @@ const char* getExecutablePath(const char* argv0) {
     return buf;
 }
 
+bool changeWorkingDir(const char* directory) {
+	return chdir(directory) == 0;
+}
 bool changeWorkingDir(const char* directory) { return chdir(directory) == 0; }
 
+void packrSetEnv(const char *key, const char *value) {
+	setenv(key, value, 1);
+}
 void packrSetEnv(const char* key, const char* value) { setenv(key, value, 1); }
